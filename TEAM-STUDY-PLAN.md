@@ -6,7 +6,7 @@
 **Start date:** Wednesday 30 September 2026
 **Exam window:** Wednesday 28 – Friday 30 October 2026, or earlier if you feel ready. Iulian pays and books each person's slot right after the 30 September kickoff — create your Pearson VUE account before then. 24-hour cancellation rule.
 **Cost:** exam fee and any retake paid by the company
-**Companion documents:** `STUDY-PLAN.md` (same exam facts, scenarios, and Git model), `SETUP.md` (environment and repo setup, step by step), `GITHUB-AND-PIPELINE-CONCEPTS.md` (branches, merging, CI/CD, containers). This document adds engineer-level depth and hour estimates.
+**Companion documents:** `SETUP.md` (environment and repo setup, step by step), `GITHUB-AND-PIPELINE-CONCEPTS.md` (branches, merging, CI/CD, containers), `QUESTIONS.md` (shared question log).
 
 ---
 
@@ -104,9 +104,74 @@ Those who finish early spend the spare days mentoring their pair through Scenari
 
 ---
 
-## 5. Scenario builds — engineer version
+## 5. Scenario builds
 
-Same six specifications as `STUDY-PLAN.md` §5, with these additions for engineers:
+Each build lives in its own folder and ends with a commit. Build order follows the calendar: 2, 5, 6, 4, 1, 3.
+
+### Scenario 2 — Code Generation with Claude Code (folder `02-claude-code`)
+
+Take a small sample project and set up:
+- Project-level `CLAUDE.md` with universal standards
+- A `.claude/rules/` file with YAML frontmatter `paths:` glob (e.g. `**/*.test.*`)
+- A project slash command in `.claude/commands/`
+- A skill in `.claude/skills/` with `context: fork` and `allowed-tools`
+- Run `/memory` to verify what loads
+- One task in plan mode, one in direct execution — compare
+
+Concepts tested: config hierarchy (user / project / directory), `@import`, `.claude/rules/` vs subdirectory CLAUDE.md, skills vs CLAUDE.md, plan mode criteria, Explore subagent.
+
+### Scenario 5 — Claude Code for CI/CD (folder `05-ci-cd`)
+
+- A GitHub Actions workflow that runs `claude -p` with `--output-format json --json-schema '<schema>'` on a pull request
+- Review criteria in CLAUDE.md (what to report vs skip)
+- Open a PR on a branch; read the review Claude posts
+
+Concepts tested: `-p`/`--print`, structured CI output, explicit criteria to cut false positives, independent review instance vs self-review, per-file + integration review passes, sync API for blocking checks vs Batches API for overnight jobs.
+
+### Scenario 6 — Structured Data Extraction (folder `06-extraction`)
+
+- An extraction tool with a JSON schema: required + optional/nullable fields, enum with `"other"` + detail string, `"unclear"` for ambiguous cases
+- `tool_choice: "any"` and forced tool selection `{"type": "tool", "name": "..."}`
+- Pydantic validation → retry with the error appended to the prompt
+- Few-shot examples for varied document formats
+- A small Message Batches job with `custom_id`; resubmit only failures
+- Field-level confidence scores; route low-confidence to human review
+
+Concepts tested: tool_use eliminates syntax errors but not semantic ones; nullable fields prevent fabrication; when retries can't help (info absent from source); batch API tradeoffs (50% cheaper, up to 24h, no multi-turn tools).
+
+### Scenario 4 — Developer Productivity with Claude (folder `04-dev-productivity`)
+
+- A small MCP server with 3–4 tools, two deliberately similar, differentiated only by description
+- Structured errors: `isError`, `errorCategory` (transient / validation / permission / business), `isRetryable`
+- One MCP resource exposing a content catalog
+- Project-scoped `.mcp.json` with `${VAR}` expansion; a second server in user-scoped `~/.claude.json`
+- Use Claude Code with Grep / Glob / Read / Edit plus the server to explore an unfamiliar repo
+
+Concepts tested: tool descriptions as the primary selection mechanism; splitting vs consolidating tools; too many tools degrades selection; Grep (content) vs Glob (paths); Edit → Read+Write fallback; community servers over custom for standard integrations.
+
+### Scenario 1 — Customer Support Resolution Agent (folder `01-support-agent`)
+
+- Four mock tools: `get_customer`, `lookup_order`, `process_refund`, `escalate_to_human`
+- A hand-written agentic loop on `stop_reason`
+- A hook that blocks refunds over $500 and redirects to escalation
+- A programmatic gate that blocks `process_refund` until `get_customer` returned a verified ID
+- Explicit escalation criteria with few-shot examples in the system prompt
+- A "case facts" block (amounts, dates, order IDs) kept outside summarised history
+- Structured handoff summary for human escalation
+
+Concepts tested: hooks for deterministic guarantees vs prompts for probabilistic compliance; escalation triggers (explicit customer request, policy gaps, no progress); sentiment and self-confidence are unreliable proxies; ask for identifiers on multiple matches; trim verbose tool output.
+
+### Scenario 3 — Multi-Agent Research System (folder `03-research-agents`)
+
+- Coordinator with `allowedTools` including `"Task"`, plus at least two subagents
+- Parallel Task calls in a single coordinator response
+- Subagent outputs as structured claim / evidence / source / date
+- Simulated subagent timeout returning structured error context (failure type, attempted query, partial results, alternatives)
+- Test with two credible sources giving conflicting numbers — output must keep both with attribution
+
+Concepts tested: hub-and-spoke; isolated subagent context; narrow decomposition as root cause of coverage gaps; scoped cross-role tools (e.g. `verify_fact` for synthesis); provenance through synthesis; lost-in-the-middle; scratchpad files; crash-recovery manifests; `/compact`.
+
+### How to work each build
 
 - **Scenarios 2 and 5** (Claude Code configuration, CI/CD): Claude Code builds them; the engineer reviews the diff, asks why each file is where it is, and opens the real PR. They're configuration, not code.
 - **Scenarios 6, 4, 1, 3: build by hand first.** Then ask Claude Code to build the same thing and diff the two. Where Claude's version differs, work out which is better and why. That comparison is the most exam-relevant hour in each build.
@@ -152,7 +217,7 @@ Developers lose points here more often than on architecture. Twenty minutes a da
 | Item | Answer |
 |---|---|
 | Non-interactive Claude Code | `claude -p` / `--print` |
-| Structured CI output | `--output-format json --json-schema <file>` |
+| Structured CI output | `--output-format json --json-schema '<schema as JSON text>'` — the schema is passed inline as a string, not a file path |
 | Project slash commands | `.claude/commands/` (shared via git) |
 | Personal slash commands | `~/.claude/commands/` |
 | Skills location and frontmatter | `.claude/skills/<name>/SKILL.md`; `context: fork`, `allowed-tools`, `argument-hint` |
